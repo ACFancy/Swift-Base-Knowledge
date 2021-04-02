@@ -9,6 +9,7 @@ tmp/
 tests/
 DerivedData/
 CIDerivedData/
+*/DerivedData/
 
 ## Bundler
 vendor/
