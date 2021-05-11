@@ -157,4 +157,203 @@ func populationOfCapital4(country: String) -> Int? {
  “类型系统将有助于你捕捉难以察觉的细微错误。其中一些错误很容易在开发过程中被发现，但是其余的可能会一直留存到生产代码中去。坚持使用可选值能够从根本上杜绝这类错误。”
  */
 
+func plusIsCommmutative(x: Int, y: Int) -> Bool {
+    return x + y == y + x
+}
+
+//check("Plus should be commutative", plusIsCommmutative)
+
+func minusIsCommutative(x: Int, y: Int) -> Bool {
+    return x - y == y - x
+}
+
+//check("Minus should be commutative", minusIsCommutative)
+
+//尾随闭包特性
+//check("Additive identity") {(x: Int) in  x + 0 == x }
+
+// QuickCheck
+let numberOfIterations = 10
+public protocol Arbitrary {
+    static func arbitrary() -> Self
+}
+
+extension Int: Arbitrary {
+    public static func arbitrary() -> Int {
+        return Int(arc4random())
+    }
+}
+
+Int.arbitrary()
+
+extension Int {
+    static func arbitrary(in range: CountableRange<Int>) -> Int {
+        let diff = range.upperBound - range.lowerBound
+        return range.lowerBound + (Int.arbitrary() % diff)
+    }
+}
+
+extension UnicodeScalar: Arbitrary {
+    public static func arbitrary() -> Unicode.Scalar {
+        return UnicodeScalar(Int.arbitrary(in: 65..<90))!
+    }
+}
+
+extension String: Arbitrary {
+    public static func arbitrary() -> String {
+        let randomLength = Int.arbitrary(in: 0..<40)
+        let randomScalars = (0..<randomLength).map { _ in
+            UnicodeScalar.arbitrary()
+        }
+        return String(UnicodeScalarView(randomScalars))
+    }
+}
+
+String.arbitrary()
+
+func check1<A: Arbitrary>(_ message: String, _ property: (A) -> Bool) {
+    for _ in 0..<numberOfIterations {
+        let value = A.arbitrary()
+        guard property(value) else {
+            print("\(message) doesn't hold: \(value)")
+            return
+        }
+    }
+    print("\(message) passed \(numberOfIterations) tests.")
+}
+
+extension CGSize {
+    var area: CGFloat {
+        return width * height
+    }
+}
+
+extension CGSize: Arbitrary {
+    public static func arbitrary() -> CGSize {
+        return CGSize(width: .arbitrary(), height: .arbitrary())
+    }
+}
+
+check1("Area should be at least 0") { (size: CGSize) in size.area >= 0 }
+
+//缩小范围
+check1("Every string starts with Hello") {(s: String) in s.hasPrefix("Hello") }
+
+public protocol Smaller {
+    func smaller() -> Self?
+}
+
+extension Int: Smaller {
+    public func smaller() -> Int? {
+        return self == 0 ? nil : self / 2
+    }
+}
+100.smaller()
+
+extension String: Smaller {
+    var characters: [Character] {
+        return Array(self)
+    }
+
+    public func smaller() -> String? {
+        return isEmpty ? nil : String(characters.dropFirst())
+    }
+}
+
+public protocol Arbitrary2: Smaller {
+    static func arbitrary() -> Self
+}
+
+// 反复缩小范围
+func iterate<A>(while condition: (A) -> Bool, inital: A, next:(A) ->A?) -> A {
+    guard let x = next(inital), condition(x) else {
+        return inital
+    }
+    return iterate(while: condition, inital: x, next: next)
+}
+
+func check2<A: Arbitrary2>(_ message: String, _ property:(A) -> Bool) {
+    for _ in 0..<numberOfIterations {
+        let value = A.arbitrary()
+        guard property(value) else {
+            let smallerValue = iterate(while: { !property($0) }, inital: value) {
+                $0.smaller()
+            }
+            print("\(message) doesn't hold: \(smallerValue)")
+            return
+        }
+    }
+    print("\(message) passed \(numberOfIterations) tests.")
+}
+
+func qsort(_ input: [Int]) -> [Int] {
+    var array = input
+    if array.isEmpty {
+        return []
+    }
+    let pivot = array.removeFirst()
+    let lesser = array.filter({ $0 < pivot })
+    let greater = array.filter({ $0 >= pivot })
+    let intermediate = qsort(lesser) + [pivot]
+    return intermediate + qsort(greater)
+}
+
+extension Array: Smaller {
+    public func smaller() -> Array<Element>? {
+        guard !isEmpty else {
+            return nil
+        }
+        return Array(dropLast())
+    }
+}
+
+extension Array: Arbitrary2 where Element: Arbitrary2 {
+    public static func arbitrary() -> [Element] {
+        let randomLength = Int.arbitrary(in: 0..<50)
+        return (0..<randomLength).map { _ in
+            .arbitrary()
+        }
+    }
+}
+
+extension Int: Arbitrary2 {}
+
+check2("qsort should behave like sort") { (x: [Int]) -> Bool in
+    return qsort(x) == x.sorted()
+}
+
+
+struct ArbitraryInstance<T> {
+    let arbitrary: () -> T
+    let smaller: (T) -> T?
+}
+
+func checkHelper<A>(_ arbitraryInstance: ArbitraryInstance<A>, _ property: (A) -> Bool, _ message: String) {
+    for _ in 0..<numberOfIterations {
+        let value = arbitraryInstance.arbitrary()
+        guard property(value) else {
+            let smallerValue = iterate(while: { !property($0) }, inital: value, next: arbitraryInstance.smaller)
+            print("\(message) doesn't hold: \(smallerValue)")
+            return
+        }
+    }
+    print("\(message) passed \(numberOfIterations) tests.")
+}
+
+func check3<X: Arbitrary2>(_ message: String, property:(X) -> Bool) {
+    let instance = ArbitraryInstance(arbitrary: X.arbitrary, smaller: { $0.smaller() })
+    checkHelper(instance, property, message)
+}
+
+func check4<X: Arbitrary2>(_ message: String, _ property: ([X]) -> Bool) {
+    let instance = ArbitraryInstance(arbitrary: Array.arbitrary, smaller: { (x: [X]) in x.smaller()})
+    checkHelper(instance, property, message)
+}
+
+check4("qsort should behave like sort") { (x: [Int]) -> Bool in
+    return qsort(x) == x.sorted()
+}
+
+
+
 
