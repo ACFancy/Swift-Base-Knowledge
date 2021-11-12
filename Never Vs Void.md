@@ -4,6 +4,7 @@
   - We use Never to tell compiler there is no return to caller site. Application runloop is terminated.
 - 例子
   ```swift
+    /// Never
     func noReturn() -> Never {
       fatalError() // fatalError also returns Never, so no need to `return`
     }
@@ -25,7 +26,7 @@
       }
     }
     
-    ## Void
+    /// Void
     public func abortVoid() -> Void {
        fatalError()
     }
